@@ -1,18 +1,20 @@
 import express from "express";
 import cors from "cors";
-import {prisma} from "./config/prisma.js"
+import authRouter from "./routers/auth.routers.js";
+import { notFound, errorHandler } from "./middleware/errorHandler.js";
 
 const app = express();
 
-app.use(cors())
-app.use(express.json())
+app.use(cors());
+app.use(express.json());
 
-app.get("/api/health",(_req,res)=>{
-    res.json({status:"ok"})
-})
-app.get("/api/health/db", async (_req, res) => {
-  const users = await prisma.user.count();
-  res.json({ status: "ok", users });
+app.get("/api/health", (_req, res) => {
+  res.json({ status: "ok" });
 });
 
-export default app
+app.use("/api/auth", authRouter);
+
+app.use(notFound);
+app.use(errorHandler);
+
+export default app;
