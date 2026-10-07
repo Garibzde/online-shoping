@@ -1,32 +1,54 @@
+import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { prisma } from "../config/prisma.js";
 import { env } from "../config/env.js";
-import { AppError } from "../utils/AppError.js"
-import type { RegisterInput } from "../validators/auth.validator.js";
+import { AppError } from "../utils/AppError.js";
 import type { Role } from "../generated/prisma/enums.js";
-
+import type { RegisterInput } from "../validators/auth.validator.js";
 
 const SALT_ROUNDS = 10;
-const DUMMY_HASH = bcrypt.hashSync("dummy-password", SALT_ROUNDS)
+const DUMMY_HASH = bcrypt.hashSync("dummy-password", SALT_ROUNDS);
 
 const publicUserSelect = {
-    id:true,
-    name:true,
-    email:true,
-    role:true,
-    createdAt:true,
-
+  id: true,
+  name: true,
+  email: true,
+  role: true,
+  createdAt: true,
 } as const;
 
-const signToken = (id: number, role: Role) => {
-  return jwt.sign(
-    { id, role },
-    env.jwtSecret,
-    {
-      expiresIn: env.jwtExpiresIn as jwt.SignOptions["expiresIn"],
-    }
-  );
+const signAccessToken = (id: number, role: Role) =>
+  jwt.sign({ id, role }, env.jwtSecret, {
+    expiresIn: env.jwtExpiresIn as jwt.SignOptions["expiresIn"],
+  });
+
+const hashToken = (token: string) =>
+  crypto.createHash("sha256").update(token).digest("hex");
+const generateRefreshToken = (userId: number) => {
+  const token = crypto.randomBytes(48).toString("hex");
+  const record = {
+    tokenHash: hashToken(token),
+    userId,
+    expiresAt: new Date(
+      Date.now() + env.refreshTokenDays * 24 * 60 * 60 * 1000
+    ),
+  };
+  return { token, record };
+};
+
+const issueTokens = async (user: { id: number; role: Role }) => {
+  await prisma.refreshToken.deleteMany({
+    where: { userId: user.id, expiresAt: { lt: new Date() } },
+  });
+
+  const { token, record } = generateRefreshToken(user.id);
+  await prisma.refreshToken.create({ data: record });
+
+  return {
+    accessToken: signAccessToken(user.id, user.role),
+    refreshToken: token,
+  };
 };
 
 export const registerUser = async (data: RegisterInput) => {
@@ -45,13 +67,15 @@ export const registerUser = async (data: RegisterInput) => {
       name: data.name,
       email: data.email,
       password: hashed,
-      cart: { create: {} }, 
+      cart: { create: {} },
     },
     select: publicUserSelect,
   });
 
-  return { user, token: signToken(user.id, user.role) };
+  const tokens = await issueTokens(user);
+  return { user, ...tokens };
 };
+
 export const loginUser = async (email: string, password: string) => {
   const found = await prisma.user.findUnique({ where: { email } });
 
@@ -63,9 +87,51 @@ export const loginUser = async (email: string, password: string) => {
   }
 
   const { password: _password, ...user } = found;
-  return { user, token: signToken(found.id, found.role) };
+  const tokens = await issueTokens(found);
+  return { user, ...tokens };
 };
 
+export const refreshSession = async (oldToken: string) => {
+  const stored = await prisma.refreshToken.findUnique({
+    where: { tokenHash: hashToken(oldToken) },
+    include: { user: true },
+  });
+
+  if (!stored) {
+    throw new AppError(401, "Refresh token etibarsızdır");
+  }
+
+  if (stored.expiresAt < new Date()) {
+    await prisma.refreshToken.deleteMany({ where: { id: stored.id } });
+    throw new AppError(401, "Sessiyanın vaxtı bitib, yenidən daxil olun");
+  }
+
+ 
+  const { token: newToken, record } = generateRefreshToken(stored.userId);
+
+  await prisma.$transaction(async (tx) => {
+    const { count } = await tx.refreshToken.deleteMany({
+      where: { id: stored.id },
+    });
+    
+    if (count === 0) {
+      throw new AppError(401, "Refresh token etibarsızdır");
+    }
+    await tx.refreshToken.create({ data: record });
+  });
+
+  return {
+    accessToken: signAccessToken(stored.userId, stored.user.role),
+    refreshToken: newToken,
+  };
+};
+
+export const logoutUser = async (token?: string) => {
+  if (!token) return;
+  await prisma.refreshToken.deleteMany({
+    where: { tokenHash: hashToken(token) },
+  });
+};
 
 export const getCurrentUser = async (id: number) => {
   const user = await prisma.user.findUnique({
