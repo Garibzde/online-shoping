@@ -8,7 +8,9 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "postinstall": "prisma skills sync || exit 0",
-    "seed:admin":"tsx prisma/seed.ts"
+    "seed:admin":"tsx prisma/seed.ts",
+    "seed:products":"tsx prisma/seed-products.ts",
+    "studio": "prisma studio"
   },
   "keywords": [],
   "author": "",

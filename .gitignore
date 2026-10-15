@@ -2,3 +2,4 @@ node_modules
 dist
 .env
 backend/src/generated
+{  "email": "admin@shop.com", "password": "shopadmin123-" }
