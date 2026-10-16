@@ -7,6 +7,8 @@ import adminRouter from "./routers/admin.routes.js"
 import { notFound, errorHandler } from "./middleware/errorHandler.js"
 import categoryRouter from "./routers/category.routes.js"
 import productRouter from "./routers/product.routes.js"
+import cartRouter from "./routers/cart.routes.js";
+
 
 const app = express()
 
@@ -22,6 +24,7 @@ app.use("/api/auth", authRouter)
 app.use("/api/admin", adminRouter)
 app.use("/api/categories",categoryRouter)
 app.use("/api/products", productRouter)
+app.use("/api/cart", cartRouter);
 
 
 app.use(notFound)
