@@ -94,6 +94,8 @@ model Order {
   userId    Int
   status    OrderStatus @default(PENDING)
   total     Decimal     @db.Decimal(10, 2)
+  shippingAddress String
+  phone           String
   createdAt DateTime    @default(now())
 
   user  User        @relation(fields: [userId], references: [id])
