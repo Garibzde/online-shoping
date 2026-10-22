@@ -8,7 +8,7 @@ import type {
 } from "../validators/order.validator.js";
 import { count } from "node:console";
 
-const orderInclude = {
+export const orderInclude = {
   items: {
     orderBy: { id: "asc" },
     include: {
@@ -19,7 +19,7 @@ const orderInclude = {
 
 type OrderWithItems = Prisma.OrderGetPayload<{ include: typeof orderInclude }>;
 
-const toDto = (order: OrderWithItems) => ({
+export const toDto = (order: OrderWithItems) => ({
   id: order.id,
   status: order.status,
   total: order.total.toFixed(2),
